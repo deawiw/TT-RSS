@@ -259,6 +259,15 @@ tt_get_headlines <- function(
       skip = as.character(skip),
       is_cat = FALSE,
       view_mode = "all_articles",
+      show_excerpt = TRUE,
+      show_content = TRUE
+    ),
+    list(
+      feed_id = as.character(feed_id),
+      limit = as.character(limit),
+      skip = as.character(skip),
+      is_cat = FALSE,
+      view_mode = "all_articles",
       show_excerpt = TRUE
     )
   )

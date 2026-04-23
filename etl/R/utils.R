@@ -62,6 +62,25 @@ ensure_dir <- function(path) {
   invisible(path)
 }
 
+write_csv_utf8 <- function(data, path) {
+  ensure_dir(dirname(path))
+  utils::write.csv(data, path, row.names = FALSE, na = "", fileEncoding = "UTF-8")
+  invisible(path)
+}
+
+format_utc_timestamp <- function(value = Sys.time()) {
+  datetime <- tryCatch(
+    as.POSIXct(value, origin = "1970-01-01", tz = "UTC"),
+    error = function(e) NA
+  )
+
+  if (is.na(datetime)) {
+    return(NA_character_)
+  }
+
+  format(datetime, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+}
+
 write_json_pretty <- function(data, path) {
   ensure_dir(dirname(path))
 

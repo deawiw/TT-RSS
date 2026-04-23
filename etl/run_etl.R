@@ -25,6 +25,8 @@ source(file.path(etl_dir, "R", "utils.R"))
 ensure_required_packages(c("httr2", "jsonlite"))
 source(file.path(etl_dir, "R", "api_client.R"))
 source(file.path(etl_dir, "R", "config.R"))
+source(file.path(etl_dir, "R", "transform_articles.R"))
+source(file.path(etl_dir, "R", "validate_articles.R"))
 
 print_usage <- function() {
   cat(
@@ -79,7 +81,80 @@ parse_args <- function(args, project_root) {
   options
 }
 
-run_etl_smoke_test <- function() {
+extract_feed_index <- function(feed_records) {
+  if (length(feed_records) == 0) {
+    return(data.frame(feed_id = integer(), feed_title = character(), stringsAsFactors = FALSE))
+  }
+
+  feed_rows <- lapply(feed_records, function(record) {
+    feed_id <- suppressWarnings(as.integer(trim_string(record$id)))
+    feed_title <- clean_html_text(extract_candidate_value(record, c("title", "feed_title")))
+
+    data.frame(
+      feed_id = feed_id,
+      feed_title = feed_title,
+      stringsAsFactors = FALSE
+    )
+  })
+
+  feed_index <- do.call(rbind, feed_rows)
+  feed_index <- feed_index[!is.na(feed_index$feed_id) & feed_index$feed_id > 0L, , drop = FALSE]
+
+  if (nrow(feed_index) == 0) {
+    return(feed_index)
+  }
+
+  feed_index <- feed_index[!duplicated(feed_index$feed_id), , drop = FALSE]
+  rownames(feed_index) <- NULL
+  feed_index
+}
+
+apply_feed_context <- function(records, feed_title) {
+  lapply(records, function(record) {
+    if (is.null(record$feed_title) || !nzchar(trim_string(record$feed_title))) {
+      record$feed_title <- feed_title
+    }
+
+    record
+  })
+}
+
+resolve_per_feed_limit <- function(settings) {
+  configured_limits <- c(
+    as.integer(settings$headlines_limit),
+    as.integer(settings$max_articles_per_feed)
+  )
+
+  configured_limits <- configured_limits[!is.na(configured_limits) & configured_limits > 0L]
+
+  if (length(configured_limits) == 0) {
+    fail("Не удалось определить рабочий лимит статей на ленту из конфигурации.")
+  }
+
+  min(configured_limits)
+}
+
+log_validation_report <- function(report) {
+  status_message <- if (isTRUE(report$ok)) "Validation status: ok" else "Validation status: failed"
+  log_info(status_message)
+
+  warning_messages <- unlist(report$warnings, use.names = FALSE)
+  error_messages <- unlist(report$errors, use.names = FALSE)
+
+  if (length(warning_messages) > 0) {
+    for (warning_message in warning_messages) {
+      log_warn(warning_message)
+    }
+  }
+
+  if (length(error_messages) > 0) {
+    for (error_message in error_messages) {
+      log_error(error_message)
+    }
+  }
+}
+
+run_etl_pipeline <- function() {
   cli_options <- parse_args(commandArgs(trailingOnly = TRUE), project_root)
   settings <- load_etl_settings(
     project_root = project_root,
@@ -91,8 +166,10 @@ run_etl_smoke_test <- function() {
   log_info(sprintf("ETL-конфиг загружен из %s", settings$config_path))
 
   output_dir <- settings$output_dir
-  smoke_test_dir <- file.path(output_dir, "smoke-test")
-  ensure_dir(smoke_test_dir)
+  validation_report_file <- file.path(output_dir, "validation_report.json")
+  data_raw_dir <- file.path(project_root, "data-raw")
+  ensure_dir(output_dir)
+  ensure_dir(data_raw_dir)
 
   session_id <- NULL
 
@@ -128,24 +205,99 @@ run_etl_smoke_test <- function() {
     timeout_sec = settings$timeout_sec
   )
 
-  feeds_count <- length(feeds_result$records)
-  output_file <- file.path(smoke_test_dir, "getFeeds.json")
-  write_json_pretty(feeds_result$raw, output_file)
+  feed_index <- extract_feed_index(feeds_result$records)
+  available_feed_count <- nrow(feed_index)
 
-  if (feeds_count == 0L) {
-    log_warn("getFeeds выполнен успешно, но список лент пуст.")
-  } else {
-    log_info(sprintf("getFeeds выполнен успешно. Получено лент: %s", feeds_count))
+  if (available_feed_count == 0L) {
+    fail("TT-RSS API не вернул ни одной обычной ленты с положительным feed_id.")
   }
 
-  log_info(sprintf("Сырой ответ getFeeds сохранен в %s", output_file))
-  log_info("Текущая версия ETL — это каркас: логин, базовый getFeeds и инфраструктура конфигурации.")
+  per_feed_limit <- resolve_per_feed_limit(settings)
+  log_info(sprintf("Обычных лент найдено: %s. Рабочий лимит статей на ленту: %s.", available_feed_count, per_feed_limit))
+
+  all_headline_records <- list()
+
+  for (feed_index_position in seq_len(nrow(feed_index))) {
+    feed_id <- feed_index$feed_id[[feed_index_position]]
+    feed_title <- feed_index$feed_title[[feed_index_position]]
+
+    log_info(
+      sprintf(
+        "[%s/%s] Загружаю headlines для feed_id=%s (%s).",
+        feed_index_position,
+        nrow(feed_index),
+        feed_id,
+        truncate_string(feed_title, 120L)
+      )
+    )
+
+    headlines_result <- tt_get_headlines(
+      api_url = settings$api_url,
+      session_id = session_id,
+      feed_id = feed_id,
+      limit = per_feed_limit,
+      timeout_sec = settings$timeout_sec
+    )
+
+    contextualized_records <- apply_feed_context(headlines_result$records, feed_title = feed_title)
+    all_headline_records <- c(all_headline_records, contextualized_records)
+
+    log_info(sprintf("Получено headlines из ленты %s: %s", feed_id, length(contextualized_records)))
+
+    if (settings$request_pause_sec > 0) {
+      Sys.sleep(settings$request_pause_sec)
+    }
+  }
+
+  if (length(all_headline_records) == 0L) {
+    fail("TT-RSS не вернул ни одной headline-записи для выбранных лент.")
+  }
+
+  extracted_at <- Sys.time()
+  transform_result <- transform_headlines_records(
+    raw_records = all_headline_records,
+    extracted_at = extracted_at,
+    drop_invalid_rows = TRUE
+  )
+
+  normalized_output_file <- file.path(data_raw_dir, "normalized_articles.csv")
+  write_csv_utf8(transform_result$data, normalized_output_file)
+
+  validation_report <- validate_articles_df(
+    articles_df = transform_result$data,
+    transform_stats = transform_result$stats
+  )
+
+  write_json_pretty(validation_report, validation_report_file)
+
+  log_info(sprintf("Финальный нормализованный датафрейм сохранен в %s", normalized_output_file))
+  log_info(sprintf("Служебный validation report сохранен в %s", validation_report_file))
+  log_info(
+    sprintf(
+      "Transform stats: raw=%s, after_transform=%s, dropped_duplicates=%s, dropped_invalid_rows=%s",
+      transform_result$stats$total_records_raw,
+      transform_result$stats$total_records_after_transform,
+      transform_result$stats$dropped_duplicates,
+      transform_result$stats$dropped_invalid_rows
+    )
+  )
+
+  if (length(transform_result$warnings) > 0) {
+    for (warning_message in transform_result$warnings) {
+      log_warn(warning_message)
+    }
+  }
+
+  log_validation_report(validation_report)
+  assert_validation_ok(validation_report)
+
+  log_info("ETL завершен успешно: рабочий набор статей выгружен, провалидирован и сохранен в data-raw.")
 
   invisible(TRUE)
 }
 
 tryCatch(
-  run_etl_smoke_test(),
+  run_etl_pipeline(),
   error = function(e) {
     log_error(conditionMessage(e))
     quit(save = "no", status = 1)
