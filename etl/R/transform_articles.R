@@ -151,7 +151,11 @@ decode_html_entities_once <- function(text) {
     rdquo = intToUtf8(8221),
     lsquo = intToUtf8(8216),
     rsquo = intToUtf8(8217),
-    bull = intToUtf8(8226)
+    bull = intToUtf8(8226),
+    deg = intToUtf8(176),
+    copy = intToUtf8(169),
+    reg = intToUtf8(174),
+    trade = intToUtf8(8482)
   )
 
   decode_codepoint <- function(codepoint, original_match) {
