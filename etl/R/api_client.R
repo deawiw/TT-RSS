@@ -222,13 +222,20 @@ tt_logout <- function(api_url, session_id, timeout_sec = 60L) {
   )
 }
 
-tt_get_feeds <- function(api_url, session_id, include_virtual_feeds = TRUE, timeout_sec = 60L) {
-  cat_id <- if (isTRUE(include_virtual_feeds)) "-4" else "-3"
-
-  payload_variants <- list(
-    list(cat_id = cat_id, unread_only = FALSE, include_nested = TRUE),
-    list(cat_id = cat_id, unread_only = FALSE)
-  )
+tt_get_feeds <- function(api_url, session_id, include_virtual_feeds = FALSE, timeout_sec = 60L) {
+  payload_variants <- if (isTRUE(include_virtual_feeds)) {
+    list(
+      list(cat_id = "-4", unread_only = FALSE, include_nested = TRUE),
+      list(cat_id = "-4", unread_only = FALSE)
+    )
+  } else {
+    list(
+      list(unread_only = FALSE, include_nested = TRUE),
+      list(cat_id = "-3", unread_only = FALSE, include_nested = TRUE),
+      list(cat_id = "0", unread_only = FALSE, include_nested = TRUE),
+      list(unread_only = FALSE)
+    )
+  }
 
   response <- tt_try_request_variants(
     api_url = api_url,

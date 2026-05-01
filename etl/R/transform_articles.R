@@ -142,21 +142,42 @@ decode_html_entities_once <- function(text) {
     quot = "\"",
     apos = "'",
     nbsp = " ",
+    ensp = " ",
+    emsp = " ",
+    thinsp = " ",
+    zwnj = "",
+    zwj = "",
+    lrm = "",
+    rlm = "",
     euro = intToUtf8(8364),
     laquo = intToUtf8(171),
     raquo = intToUtf8(187),
+    sbquo = intToUtf8(8218),
     ndash = intToUtf8(8211),
     mdash = intToUtf8(8212),
     hellip = intToUtf8(8230),
+    bdquo = intToUtf8(8222),
     ldquo = intToUtf8(8220),
     rdquo = intToUtf8(8221),
     lsquo = intToUtf8(8216),
     rsquo = intToUtf8(8217),
+    prime = intToUtf8(8242),
+    Prime = intToUtf8(8243),
     bull = intToUtf8(8226),
     deg = intToUtf8(176),
+    plusmn = intToUtf8(177),
+    times = intToUtf8(215),
+    divide = intToUtf8(247),
     copy = intToUtf8(169),
     reg = intToUtf8(174),
-    trade = intToUtf8(8482)
+    trade = intToUtf8(8482),
+    sect = intToUtf8(167),
+    para = intToUtf8(182),
+    middot = intToUtf8(183),
+    rsaquo = intToUtf8(8250),
+    lsaquo = intToUtf8(8249),
+    rarr = intToUtf8(8594),
+    larr = intToUtf8(8592)
   )
 
   decode_codepoint <- function(codepoint, original_match) {
@@ -183,12 +204,29 @@ decode_html_entities_once <- function(text) {
   })
 
   text <- replace_regex_matches(text, "&[A-Za-z][A-Za-z0-9]+;", function(match) {
-    entity_name <- tolower(sub("^&([A-Za-z][A-Za-z0-9]+);$", "\\1", match))
-    replacement <- if (entity_name %in% names(entity_map)) entity_map[[entity_name]] else match
+    entity_name <- sub("^&([A-Za-z][A-Za-z0-9]+);$", "\\1", match)
+    normalized_entity_name <- tolower(entity_name)
+    replacement <- if (entity_name %in% names(entity_map)) {
+      entity_map[[entity_name]]
+    } else if (normalized_entity_name %in% names(entity_map)) {
+      entity_map[[normalized_entity_name]]
+    } else {
+      match
+    }
     as.character(replacement)
   })
 
   text
+}
+
+remove_residual_html_entities <- function(text) {
+  if (!nzchar(text)) {
+    return("")
+  }
+
+  text <- gsub("&#[0-9]+;", " ", text, perl = TRUE)
+  text <- gsub("&#[xX][0-9A-Fa-f]+;", " ", text, perl = TRUE)
+  gsub("&[A-Za-z][A-Za-z0-9]+;", " ", text, perl = TRUE)
 }
 
 decode_html_entities <- function(text, max_passes = 3L) {
@@ -236,6 +274,9 @@ clean_html_text <- function(value) {
   text <- decode_html_entities(text)
   text <- strip_html_tags(text)
   text <- decode_html_entities(text)
+  text <- strip_html_tags(text)
+  text <- remove_residual_html_entities(text)
+  text <- gsub(intToUtf8(160), " ", text, fixed = TRUE)
   normalize_text_whitespace(text)
 }
 
