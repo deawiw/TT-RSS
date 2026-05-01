@@ -202,3 +202,23 @@ fraud_keywords <- c(
   "блокировк.* карт",
   "заблокировал.* карт"
 )
+
+# ── Функция первичного отбора 
+
+apply_fraud_keyword_filter <- function(articles_df) {
+  if (nrow(articles_df) == 0) {
+    return(articles_df)
+  }
+
+  pattern <- paste(fraud_keywords, collapse = "|")
+
+  text_to_check <- paste(
+    tolower(articles_df$content_text),
+    tolower(articles_df$title),
+    tolower(articles_df$topic_tags)
+  )
+
+  articles_df$is_fraud_related <- grepl(pattern, text_to_check, ignore.case = TRUE)
+
+  return(articles_df)
+}
