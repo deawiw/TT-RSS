@@ -67,11 +67,13 @@ async def analyze_article_with_deepseek(title: str, content: str) -> Optional[di
 
     headers = {
         "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "HTTP-Referer": "http://localhost",
+        "X-Title": "TT-RSS Fraud Analyzer"
     }
     
     payload = {
-        "model": "deepseek-chat",
+        "model": "qwen/qwen3-next-80b-a3b-instruct:free",
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Заголовок: {title}\n\nТекст новости: {content}"}
@@ -83,7 +85,7 @@ async def analyze_article_with_deepseek(title: str, content: str) -> Optional[di
     try:
         response = await asyncio.to_thread(
             requests.post,
-            "https://api.deepseek.com/v1/chat/completions",
+            "https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
             json=payload,
             timeout=60

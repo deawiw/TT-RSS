@@ -20,3 +20,5 @@ Thumbs.db
 .Rproj.user
 mcp_server/.env
 mcp_server/__pycache__/
+mcp_server/__pycache__/
+data.backup
