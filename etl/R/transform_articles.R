@@ -13,7 +13,7 @@ article_required_columns <- function() {
 }
 
 article_output_columns <- function() {
-  c(article_required_columns(), "is_fraud_related")
+  article_required_columns()
 }
 
 empty_articles_df <- function() {
