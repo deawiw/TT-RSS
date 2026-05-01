@@ -62,7 +62,16 @@ load_etl_secrets <- function(env_path) {
   env_path <- normalizePath(env_path, winslash = "/", mustWork = FALSE)
   values <- read_env_file(env_path)
 
-  required_vars <- c("TTRSS_BASE_URL", "TTRSS_USER", "TTRSS_PASSWORD")
+  required_vars <- c(
+    "TTRSS_BASE_URL",
+    "TTRSS_USER",
+    "TTRSS_PASSWORD",
+    "DB_HOST",
+    "DB_PORT",
+    "DB_NAME",
+    "DB_USER",
+    "DB_PASSWORD"
+  )
 
   for (var_name in required_vars) {
     value <- values[[var_name]] %||% ""
@@ -80,11 +89,24 @@ load_etl_secrets <- function(env_path) {
 
   do.call(Sys.setenv, values)
 
+  db_port <- suppressWarnings(as.integer(trimws(values$DB_PORT)))
+
+  if (is.na(db_port) || db_port <= 0L) {
+    fail(sprintf("DB_PORT in %s must be a positive integer.", env_path))
+  }
+
   list(
     env_path = env_path,
     base_url = values$TTRSS_BASE_URL,
     user = values$TTRSS_USER,
-    password = values$TTRSS_PASSWORD
+    password = values$TTRSS_PASSWORD,
+    db = list(
+      host = values$DB_HOST,
+      port = db_port,
+      name = values$DB_NAME,
+      user = values$DB_USER,
+      password = values$DB_PASSWORD
+    )
   )
 }
 
@@ -224,6 +246,7 @@ load_etl_settings <- function(project_root, env_path, config_path) {
     request_pause_sec = runtime_config$request_pause_sec,
     article_batch_size = runtime_config$article_batch_size,
     timeout_sec = runtime_config$timeout_sec,
-    output_dir = runtime_config$output_dir
+    output_dir = runtime_config$output_dir,
+    db = secrets$db
   )
 }

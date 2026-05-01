@@ -22,7 +22,18 @@ etl_dir <- dirname(script_path)
 project_root <- dirname(etl_dir)
 
 source(file.path(etl_dir, "R", "utils.R"))
-ensure_required_packages(c("httr2", "jsonlite", "DBI", "RPostgres"))
+ensure_required_packages(c(
+  "httr2",
+  "jsonlite",
+  "purrr",
+  "dplyr",
+  "tidyr",
+  "readr",
+  "stringr",
+  "tibble",
+  "DBI",
+  "RPostgres"
+))
 source(file.path(etl_dir, "R", "api_client.R"))
 source(file.path(etl_dir, "R", "config.R"))
 source(file.path(etl_dir, "R", "transform_articles.R"))
@@ -83,32 +94,122 @@ parse_args <- function(args, project_root) {
   options
 }
 
-extract_feed_index <- function(feed_records) {
-  if (length(feed_records) == 0L) {
-    return(data.frame(feed_id = integer(), feed_title = character(), stringsAsFactors = FALSE))
+parse_optional_integer <- function(value) {
+  parsed_value <- suppressWarnings(as.integer(trim_string(value)))
+
+  if (is.na(parsed_value)) {
+    return(NA_integer_)
   }
 
-  feed_rows <- lapply(feed_records, function(record) {
-    feed_id <- suppressWarnings(as.integer(trim_string(record$id)))
-    feed_title <- clean_html_text(extract_candidate_value(record, c("title", "feed_title")))
+  parsed_value
+}
 
-    data.frame(
-      feed_id = feed_id,
-      feed_title = feed_title,
-      stringsAsFactors = FALSE
+feed_record_to_row <- function(record) {
+  feed_url <- trim_string(record$feed_url)
+  cat_id <- parse_optional_integer(record$cat_id)
+  feed_id <- parse_optional_integer(record$id)
+  feed_title <- clean_html_text(extract_candidate_value(record, c("title", "feed_title")))
+
+  data.frame(
+    feed_id = feed_id,
+    feed_title = feed_title,
+    cat_id = cat_id,
+    feed_url = feed_url,
+    has_feed_url = !is.null(record$feed_url),
+    stringsAsFactors = FALSE
+  )
+}
+
+classify_excluded_feed <- function(feed_row) {
+  reasons <- character()
+
+  if (is.na(feed_row$feed_id)) {
+    reasons <- c(reasons, "missing feed_id")
+  } else if (feed_row$feed_id <= 0L) {
+    reasons <- c(reasons, "non-positive feed_id")
+  }
+
+  if (!is.na(feed_row$cat_id) && feed_row$cat_id < 0L) {
+    reasons <- c(reasons, "special category")
+  }
+
+  if (isTRUE(feed_row$has_feed_url) && !nzchar(feed_row$feed_url)) {
+    reasons <- c(reasons, "empty feed_url")
+  }
+
+  paste(unique(reasons), collapse = ", ")
+}
+
+extract_feed_index <- function(feed_records, include_virtual_feeds = FALSE) {
+  if (length(feed_records) == 0L) {
+    empty_feed_index <- data.frame(feed_id = integer(), feed_title = character(), stringsAsFactors = FALSE)
+
+    return(list(
+      feeds = empty_feed_index,
+      total_count = 0L,
+      excluded_virtual_count = 0L,
+      excluded_feeds = empty_feed_index
+    ))
+  }
+
+  feed_rows <- do.call(rbind, lapply(feed_records, feed_record_to_row))
+
+  if (isTRUE(include_virtual_feeds)) {
+    excluded_flags <- is.na(feed_rows$feed_id)
+  } else {
+    exclusion_reasons <- vapply(
+      seq_len(nrow(feed_rows)),
+      function(row_index) classify_excluded_feed(feed_rows[row_index, , drop = FALSE]),
+      character(1)
     )
-  })
+    excluded_flags <- nzchar(exclusion_reasons)
+  }
 
-  feed_index <- do.call(rbind, feed_rows)
-  feed_index <- feed_index[!is.na(feed_index$feed_id) & feed_index$feed_id > 0L, , drop = FALSE]
+  excluded_feeds <- feed_rows[excluded_flags, , drop = FALSE]
+  feed_index <- feed_rows[!excluded_flags, , drop = FALSE]
+
+  if (nrow(feed_index) > 0L) {
+    feed_index <- feed_index[!duplicated(feed_index$feed_id), , drop = FALSE]
+    rownames(feed_index) <- NULL
+  }
+
+  if (nrow(excluded_feeds) > 0L) {
+    excluded_feeds <- excluded_feeds[!duplicated(excluded_feeds$feed_id), , drop = FALSE]
+    rownames(excluded_feeds) <- NULL
+  }
+
+  list(
+    feeds = feed_index[, c("feed_id", "feed_title"), drop = FALSE],
+    total_count = as.integer(length(feed_records)),
+    excluded_virtual_count = as.integer(nrow(excluded_feeds)),
+    excluded_feeds = excluded_feeds[, c("feed_id", "feed_title"), drop = FALSE]
+  )
+}
+
+log_feed_selection <- function(feed_selection) {
+  feed_index <- feed_selection$feeds
+
+  log_info(sprintf("getFeeds returned feeds: %s", feed_selection$total_count))
+  log_info(sprintf("Feeds selected for processing: %s", nrow(feed_index)))
+  log_info(sprintf("Virtual/service feeds excluded: %s", feed_selection$excluded_virtual_count))
 
   if (nrow(feed_index) == 0L) {
-    return(feed_index)
+    return(invisible(FALSE))
   }
 
-  feed_index <- feed_index[!duplicated(feed_index$feed_id), , drop = FALSE]
-  rownames(feed_index) <- NULL
-  feed_index
+  log_info("Feeds to process:")
+
+  for (feed_index_position in seq_len(nrow(feed_index))) {
+    log_info(
+      sprintf(
+        "  feed_id=%s title=%s",
+        feed_index$feed_id[[feed_index_position]],
+        truncate_string(feed_index$feed_title[[feed_index_position]], 160L)
+      )
+    )
+  }
+
+  invisible(TRUE)
 }
 
 apply_feed_context <- function(records, feed_title) {
@@ -275,6 +376,7 @@ run_etl_pipeline <- function() {
 
   log_info(sprintf("Подключаюсь к TT-RSS API: %s", settings$api_url))
   pipeline_message <- "Авторизация в TT-RSS API."
+  log_info(sprintf("TT-RSS API user: %s", settings$user))
   login_result <- tt_login(
     api_url = settings$api_url,
     user = settings$user,
@@ -295,8 +397,13 @@ run_etl_pipeline <- function() {
     timeout_sec = settings$timeout_sec
   )
 
-  feed_index <- extract_feed_index(feeds_result$records)
+  feed_selection <- extract_feed_index(
+    feeds_result$records,
+    include_virtual_feeds = settings$include_virtual_feeds
+  )
+  feed_index <- feed_selection$feeds
   available_feed_count <- nrow(feed_index)
+  log_feed_selection(feed_selection)
 
   if (available_feed_count == 0L) {
     fail("TT-RSS API не вернул ни одной обычной ленты с положительным feed_id.")
