@@ -28,6 +28,7 @@ source(file.path(etl_dir, "R", "config.R"))
 source(file.path(etl_dir, "R", "transform_articles.R"))
 source(file.path(etl_dir, "R", "validate_articles.R"))
 source(file.path(etl_dir, "R", "db_client.R"))
+source(file.path(etl_dir, "R", "fraud_keywords.R"))
 
 print_usage <- function() {
   cat(
@@ -351,18 +352,22 @@ run_etl_pipeline <- function() {
     drop_invalid_rows = TRUE
   )
 
-  write_csv_utf8(transform_result$data, normalized_output_file)
+  # ---- Первичный отбор ключевыми словами ----
+  articles_df <- transform_result$data
+  articles_df <- apply_fraud_keyword_filter(articles_df)
+
+  write_csv_utf8(articles_df, normalized_output_file)
 
   pipeline_message <- "Валидация нормализованного датафрейма."
   validation_report <- validate_articles_df(
-    articles_df = transform_result$data,
+    articles_df = articles_df,
     transform_stats = transform_result$stats
   )
 
   write_json_pretty(validation_report, validation_report_file)
 
   final_counts$raw_count <- as.integer(transform_result$stats$total_records_raw %||% 0L)
-  final_counts$normalized_count <- as.integer(nrow(transform_result$data))
+  final_counts$normalized_count <- as.integer(nrow(articles_df))
   final_counts$invalid_count <- as.integer(transform_result$stats$dropped_invalid_rows %||% 0L)
   final_counts$duplicate_count <- as.integer(transform_result$stats$dropped_duplicates %||% 0L)
 
@@ -377,6 +382,7 @@ run_etl_pipeline <- function() {
       transform_result$stats$dropped_invalid_rows
     )
   )
+  log_info(sprintf("После фильтрации ключевыми словами осталось %s статей", nrow(articles_df)))
 
   if (length(transform_result$warnings) > 0L) {
     for (warning_message in transform_result$warnings) {
@@ -390,7 +396,7 @@ run_etl_pipeline <- function() {
   pipeline_message <- "Загрузка нормализованных статей в PostgreSQL."
   db_load_result <- load_articles_to_db(
     conn = db_conn,
-    articles_df = transform_result$data,
+    articles_df = articles_df,
     batch_size = settings$article_batch_size
   )
 
