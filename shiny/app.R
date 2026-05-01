@@ -1,66 +1,59 @@
-# shiny/app.R — Дашборд TT-RSS News Analyzer
+# shiny/app.R — Антифрод-лента для обычных пользователей
 library(shiny)
 library(shinythemes)
 library(dplyr)
-library(ggplot2)
-library(plotly)
 library(DT)
 
 # ============================================================
-# UI
+# UI — простой и понятный интерфейс
 # ============================================================
-ui <- navbarPage(
-  title = "TT-RSS News Analyzer",
-  theme = shinytheme("cosmo"),
+ui <- fluidPage(
+  theme = shinytheme("flatly"),
   
-  # Вкладка 1: Обзор данных
-  tabPanel("Обзор",
-    fluidRow(
-      column(4, valueBoxOutput("total_articles")),
-      column(4, valueBoxOutput("total_sources")),
-      column(4, valueBoxOutput("total_topics"))
-    ),
-    br(),
-    fluidRow(
-      column(6, plotlyOutput("articles_by_topic")),
-      column(6, plotlyOutput("articles_by_source"))
-    ),
-    br(),
-    fluidRow(
-      column(12, 
-        h4("Все статьи"),
-        DTOutput("articles_table"),
-        br(),
-        downloadButton("download_csv", "Скачать CSV")
-      )
-    )
+  # Заголовок
+  div(
+    style = "background-color: #e74c3c; padding: 20px; color: white; text-align: center;",
+    h1("🛡️ Будь в курсе мошеннических схем"),
+    p("Последние новости о мошенничестве, собранные автоматически")
   ),
   
-  # Вкладка 2: Анализ по темам
-  tabPanel("Темы",
-    sidebarLayout(
-      sidebarPanel(
-        selectInput("topic_select", "Выберите тему:", choices = NULL),
-        br(),
-        h4("Статистика:"),
-        verbatimTextOutput("topic_stats")
-      ),
-      mainPanel(
-        h4("Статьи по теме:"),
-        DTOutput("topic_articles")
-      )
-    )
+  br(),
+  
+  # Объяснение для пользователя
+  div(
+    class = "alert alert-info",
+    "📌 Здесь собраны новости о новых схемах обмана: фальшивые звонки, фишинг, поддельные сайты. "
+    , "Мы отслеживаем это за вас — чтобы вы не попались."
+  ),
+  
+  # Карточки с предупреждениями
+  uiOutput("fraud_cards"),
+  
+  br(),
+  
+  # Простая таблица (если статей много)
+  h3("📋 Все предупреждения"),
+  DTOutput("fraud_table"),
+  
+  br(),
+  
+  # Футер с пояснением
+  div(
+    class = "text-muted",
+    style = "text-align: center;",
+    "Данные обновляются автоматически из новостных источников. ",
+    "Обновлено: ", textOutput("last_update", inline = TRUE)
   )
 )
 
 # ============================================================
-# Server
+# Server — загрузка и отображение только мошеннических статей
 # ============================================================
 server <- function(input, output, session) {
   
-  # Читаем CSV из папки data-raw (путь относительно корня проекта)
-  articles <- reactiveFileReader(
-    intervalMillis = 60000,
+  # Читаем CSV
+  all_articles <- reactiveFileReader(
+    intervalMillis = 60000,  # обновление каждую минуту
     session = session,
     filePath = "../data-raw/normalized_articles.csv",
     readFunc = function(path) {
@@ -71,92 +64,69 @@ server <- function(input, output, session) {
     }
   )
   
-  # ==================== KPI ====================
-  output$total_articles <- renderValueBox({
-    valueBox(nrow(articles()), "Всего статей", icon = icon("newspaper"), color = "blue")
+  # Фильтруем ТОЛЬКО мошеннические статьи
+  fraud_articles <- reactive({
+    req(nrow(all_articles()) > 0)
+    all_articles() %>%
+      filter(is_fraud_related == "TRUE" | grepl("мошенни|фишинг|обман|звонок|рассылка|схем", 
+                                                  tolower(paste(title, content_text))))
   })
   
-  output$total_sources <- renderValueBox({
-    valueBox(n_distinct(articles()$source), "Источников", icon = icon("rss"), color = "green")
-  })
-  
-  output$total_topics <- renderValueBox({
-    valueBox(n_distinct(articles()$topic_tags), "Тем", icon = icon("tags"), color = "yellow")
-  })
-  
-  # ==================== Графики ====================
-  output$articles_by_topic <- renderPlotly({
-    req(nrow(articles()) > 0)
-    topic_counts <- articles() %>%
-      count(topic_tags, sort = TRUE) %>%
-      head(10)
+  # Карточки с последними 5 предупреждениями
+  output$fraud_cards <- renderUI({
+    req(nrow(fraud_articles()) > 0)
     
-    p <- ggplot(topic_counts, aes(x = reorder(topic_tags, n), y = n, fill = topic_tags)) +
-      geom_col() +
-      coord_flip() +
-      labs(title = "Топ-10 тем", x = "", y = "Статей") +
-      theme_minimal() +
-      theme(legend.position = "none")
+    latest <- fraud_articles() %>%
+      arrange(desc(published_at)) %>%
+      head(5)
     
-    ggplotly(p)
+    card_list <- lapply(1:nrow(latest), function(i) {
+      article <- latest[i, ]
+      
+      div(
+        class = "panel panel-danger",
+        div(
+          class = "panel-heading",
+          h4(class = "panel-title", 
+             icon("exclamation-triangle"), 
+             article$title
+          )
+        ),
+        div(
+          class = "panel-body",
+          p(strong("📰 Источник: "), article$source),
+          p(strong("📅 Опубликовано: "), substr(article$published_at, 1, 10)),
+          p(strong("🏷️ Тема: "), article$topic_tags),
+          hr(),
+          p(article$content_text %>% substr(1, 300) %>% paste0("...")),
+          a(href = article$url, target = "_blank", 
+            class = "btn btn-danger btn-sm",
+            "Читать полностью →")
+        )
+      )
+    })
+    
+    do.call(tagList, card_list)
   })
   
-  output$articles_by_source <- renderPlotly({
-    req(nrow(articles()) > 0)
-    source_counts <- articles() %>%
-      count(source, sort = TRUE) %>%
-      head(10)
-    
-    p <- ggplot(source_counts, aes(x = reorder(source, n), y = n, fill = source)) +
-      geom_col() +
-      coord_flip() +
-      labs(title = "Топ-10 источников", x = "", y = "Статей") +
-      theme_minimal() +
-      theme(legend.position = "none")
-    
-    ggplotly(p)
-  })
-  
-  # ==================== Таблица ====================
-  output$articles_table <- renderDT({
-    req(nrow(articles()) > 0)
+  # Таблица со всеми предупреждениями
+  output$fraud_table <- renderDT({
+    req(nrow(fraud_articles()) > 0)
     datatable(
-      articles() %>% select(source, title, topic_tags, published_at, url),
-      options = list(pageLength = 25, scrollX = TRUE),
-      filter = "top"
+      fraud_articles() %>% 
+        select(Дата = published_at, Заголовок = title, Источник = source, Тема = topic_tags) %>%
+        mutate(Дата = substr(Дата, 1, 10)),
+      options = list(
+        pageLength = 10,
+        language = list(url = "//cdn.datatables.net/plug-ins/1.10.11/i18n/Russian.json")
+      ),
+      rownames = FALSE
     )
   })
   
-  # ==================== Скачивание ====================
-  output$download_csv <- downloadHandler(
-    filename = function() {
-      paste0("ttrss_export_", Sys.Date(), ".csv")
-    },
-    content = function(file) {
-      write.csv(articles(), file, row.names = FALSE)
-    }
-  )
-  
-  # ==================== Вкладка "Темы" ====================
-  observe({
-    req(nrow(articles()) > 0)
-    topics <- sort(unique(articles()$topic_tags))
-    updateSelectInput(session, "topic_select", choices = topics)
-  })
-  
-  output$topic_stats <- renderPrint({
-    req(input$topic_select)
-    topic_data <- articles() %>% filter(topic_tags == input$topic_select)
-    cat("Статей:", nrow(topic_data), "\n")
-    cat("Источников:", n_distinct(topic_data$source), "\n")
-  })
-  
-  output$topic_articles <- renderDT({
-    req(input$topic_select)
-    articles() %>%
-      filter(topic_tags == input$topic_select) %>%
-      select(source, title, published_at, url) %>%
-      datatable(options = list(pageLength = 25))
+  # Время последнего обновления
+  output$last_update <- renderText({
+    format(Sys.time(), "%d.%m.%Y %H:%M")
   })
 }
 
