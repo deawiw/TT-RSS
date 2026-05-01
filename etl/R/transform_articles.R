@@ -7,7 +7,8 @@ article_required_columns <- function() {
     "published_at",
     "url",
     "topic_tags",
-    "extracted_at"
+    "extracted_at",
+    "is_fraud_related"
   )
 }
 
