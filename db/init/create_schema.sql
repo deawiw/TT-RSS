@@ -7,6 +7,7 @@ CREATE TABLE articles (
     url             TEXT NOT NULL,
     topic_tags      TEXT,
     extracted_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    is_fraud_related BOOLEAN DEFAULT FALSE,
 
     CONSTRAINT chk_articles_url_not_blank
         CHECK (length(trim(url)) > 0),
