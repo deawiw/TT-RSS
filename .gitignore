@@ -19,3 +19,4 @@ etl/output/
 Thumbs.db
 .Rproj.user
 mcp_server/.env
+mcp_server/__pycache__/
