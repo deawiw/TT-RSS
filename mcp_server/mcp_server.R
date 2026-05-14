@@ -63,7 +63,7 @@ analyze_article <- function(title, content) {
   resp <- tryCatch({
     request(API_URL) |>
       req_headers(
-        Authorization = paste("Api-Key", API_KEY),
+        Authorization = paste("Bearer", API_KEY),
         "Content-Type" = "application/json"
       ) |>
       req_body_json(body) |>
