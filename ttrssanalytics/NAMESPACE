@@ -1,1 +1,7 @@
 exportPattern(".")
+export(run_etl_pipeline)
+export(test_connection)
+export(apply_fraud_keyword_filter)
+export(tt_login)
+export(tt_get_headlines)
+export(tt_get_feeds)
