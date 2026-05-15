@@ -1,0 +1,57 @@
+---
+title: "Getting started with ttrssanalytics"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with ttrssanalytics}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, eval = FALSE}
+library(ttrssanalytics)
+
+settings <- load_package_etl_settings(
+  env_path = ".env.etl",
+  config_path = system.file("config/config.R", package = "ttrssanalytics")
+)
+
+conn <- connect_postgres(settings$db, timeout_sec = settings$timeout_sec)
+on.exit(disconnect_postgres(conn), add = TRUE)
+
+login <- tt_login(
+  api_url = settings$api_url,
+  user = settings$user,
+  password = settings$password,
+  timeout_sec = settings$timeout_sec
+)
+
+feeds <- tt_get_feeds(
+  api_url = settings$api_url,
+  session_id = login$session_id,
+  include_virtual_feeds = settings$include_virtual_feeds,
+  timeout_sec = settings$timeout_sec
+)
+
+headlines <- tt_get_headlines(
+  api_url = settings$api_url,
+  session_id = login$session_id,
+  feed_id = feeds$records[[1]]$id,
+  limit = 100L,
+  timeout_sec = settings$timeout_sec
+)
+
+transformed <- transform_headlines_records(headlines$records)
+articles <- apply_fraud_keyword_filter(transformed$data)
+report <- validate_articles_df(articles, transform_stats = transformed$stats)
+assert_validation_ok(report)
+
+load_articles_to_db(conn, articles, batch_size = settings$article_batch_size)
+tt_logout(settings$api_url, login$session_id, timeout_sec = settings$timeout_sec)
+```
+
+```{r}
+library(ttrssanalytics)
+data(sample_articles)
+
+head(sample_articles)
+```
