@@ -37,8 +37,8 @@ get_db_connection <- function() {
     dbConnect(Postgres(),
               host = Sys.getenv("DB_HOST", "localhost"),
               port = Sys.getenv("DB_PORT", "5433"),
-              dbname = Sys.getenv("DB_NAME", "ttrss"),
-              user = Sys.getenv("DB_USER", "ttrss"),
+              dbname = Sys.getenv("DB_NAME", "news_analytics"),
+              user = Sys.getenv("DB_USER", "change_me_db_user"),
               password = Sys.getenv("DB_PASSWORD", "change_me_db_password"))
   }, error = function(e) {
     message("DB connection error: ", e$message)
