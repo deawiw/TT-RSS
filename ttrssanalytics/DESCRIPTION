@@ -5,16 +5,24 @@ Authors@R: person("TTRSS", "Analytics Team", email = "ttrss.analytics@example.co
 Description: ETL pipeline for extracting and analyzing news from Tiny Tiny RSS.
 License: MIT
 Encoding: UTF-8
+LazyData: true
 Depends: R (>= 4.0)
 Imports:
     httr2,
     jsonlite,
+    DBI,
+    RPostgres,
     dplyr,
     tidyr,
     readr,
     stringr,
     tibble,
-    DBI,
-    RPostgres,
     purrr,
-    lubridate
+    lubridate,
+    logger
+Suggests:
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+Config/roxygen2/version: 8.0.0
+RoxygenNote: 8.0.0

@@ -1,3 +1,8 @@
+#' @title Build TT-RSS API URL
+#' @description Normalizes a TT-RSS base URL and appends the API endpoint path.
+#' @param base_url TT-RSS base URL without or with a trailing slash.
+#' @return Character scalar with the TT-RSS API URL.
+#' @export
 build_api_url <- function(base_url) {
   cleaned_base_url <- sub("/+$", "", trim_string(base_url))
 
@@ -25,6 +30,15 @@ extract_api_error_message <- function(parsed_body) {
   candidates[[1]]
 }
 
+#' @title Send a TT-RSS API request
+#' @description Sends a JSON POST request to the TT-RSS API and validates the HTTP and API status response.
+#' @param api_url TT-RSS API endpoint URL.
+#' @param op TT-RSS API operation name.
+#' @param payload Named list with operation-specific request fields.
+#' @param session_id Optional TT-RSS session identifier.
+#' @param timeout_sec Request timeout in seconds.
+#' @return List containing operation name, status, raw parsed response, and response content.
+#' @export
 tt_rss_api_post <- function(api_url, op, payload = list(), session_id = NULL, timeout_sec = 60L) {
   request_body <- c(list(op = op), payload)
 
@@ -163,6 +177,14 @@ as_records_list <- function(content) {
   content
 }
 
+#' @title Log in to TT-RSS
+#' @description Authenticates against the TT-RSS API and returns a session identifier.
+#' @param api_url TT-RSS API endpoint URL.
+#' @param user TT-RSS username.
+#' @param password TT-RSS password.
+#' @param timeout_sec Request timeout in seconds.
+#' @return List with session identifier, API level, and raw API response.
+#' @export
 tt_login <- function(api_url, user, password, timeout_sec = 60L) {
   if (is_blank(user)) {
     fail("Отсутствует TTRSS_USER. Проверьте .env.etl.")
@@ -199,6 +221,13 @@ tt_login <- function(api_url, user, password, timeout_sec = 60L) {
   )
 }
 
+#' @title Log out from TT-RSS
+#' @description Ends an active TT-RSS API session. Logout errors are logged and converted to FALSE.
+#' @param api_url TT-RSS API endpoint URL.
+#' @param session_id TT-RSS session identifier.
+#' @param timeout_sec Request timeout in seconds.
+#' @return Logical value indicating whether logout succeeded.
+#' @export
 tt_logout <- function(api_url, session_id, timeout_sec = 60L) {
   if (is_blank(session_id)) {
     return(invisible(FALSE))
@@ -222,6 +251,14 @@ tt_logout <- function(api_url, session_id, timeout_sec = 60L) {
   )
 }
 
+#' @title Get TT-RSS feeds
+#' @description Fetches feed records from the TT-RSS API, optionally including virtual feeds.
+#' @param api_url TT-RSS API endpoint URL.
+#' @param session_id TT-RSS session identifier.
+#' @param include_virtual_feeds Logical flag controlling whether virtual feeds are requested.
+#' @param timeout_sec Request timeout in seconds.
+#' @return List with raw API response and normalized feed records.
+#' @export
 tt_get_feeds <- function(api_url, session_id, include_virtual_feeds = FALSE, timeout_sec = 60L) {
   payload_variants <- if (isTRUE(include_virtual_feeds)) {
     list(
@@ -251,6 +288,16 @@ tt_get_feeds <- function(api_url, session_id, include_virtual_feeds = FALSE, tim
   )
 }
 
+#' @title Get TT-RSS headlines
+#' @description Fetches headline/article records for one TT-RSS feed.
+#' @param api_url TT-RSS API endpoint URL.
+#' @param session_id TT-RSS session identifier.
+#' @param feed_id Numeric or character TT-RSS feed identifier.
+#' @param limit Maximum number of headlines to request.
+#' @param skip Number of headlines to skip.
+#' @param timeout_sec Request timeout in seconds.
+#' @return List with raw API response and normalized headline records.
+#' @export
 tt_get_headlines <- function(
   api_url,
   session_id,
