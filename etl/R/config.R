@@ -13,8 +13,12 @@ strip_optional_quotes <- function(value) {
   value
 }
 
-read_env_file <- function(path) {
+read_env_file <- function(path, required = TRUE) {
   if (!file.exists(path)) {
+    if (!isTRUE(required)) {
+      return(list())
+    }
+
     fail(
       sprintf(
         "Не найден .env.etl: %s. Создайте его из шаблона .env.etl.example.",
@@ -58,11 +62,8 @@ read_env_file <- function(path) {
   values
 }
 
-load_etl_secrets <- function(env_path) {
-  env_path <- normalizePath(env_path, winslash = "/", mustWork = FALSE)
-  values <- read_env_file(env_path)
-
-  required_vars <- c(
+etl_required_env_vars <- function() {
+  c(
     "TTRSS_BASE_URL",
     "TTRSS_USER",
     "TTRSS_PASSWORD",
@@ -72,6 +73,27 @@ load_etl_secrets <- function(env_path) {
     "DB_USER",
     "DB_PASSWORD"
   )
+}
+
+merge_process_env <- function(values, var_names) {
+  for (var_name in var_names) {
+    env_value <- Sys.getenv(var_name, unset = NA_character_)
+
+    if (!is.na(env_value) && nzchar(trimws(env_value))) {
+      values[[var_name]] <- env_value
+    }
+  }
+
+  values
+}
+
+load_etl_secrets <- function(env_path) {
+  env_path <- normalizePath(env_path, winslash = "/", mustWork = FALSE)
+  required_vars <- etl_required_env_vars()
+  process_env_values <- Sys.getenv(required_vars, unset = "")
+  has_required_process_env <- all(nzchar(trimws(process_env_values)))
+  values <- read_env_file(env_path, required = !has_required_process_env)
+  values <- merge_process_env(values, required_vars)
 
   for (var_name in required_vars) {
     value <- values[[var_name]] %||% ""
@@ -96,7 +118,7 @@ load_etl_secrets <- function(env_path) {
   }
 
   list(
-    env_path = env_path,
+    env_path = if (file.exists(env_path)) env_path else "process environment",
     base_url = values$TTRSS_BASE_URL,
     user = values$TTRSS_USER,
     password = values$TTRSS_PASSWORD,

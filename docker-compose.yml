@@ -42,6 +42,21 @@ services:
       db:
         condition: service_healthy
 
+  etl:
+    build:
+      context: ./etl
+    container_name: tt-rss-etl
+    restart: unless-stopped
+    env_file:
+      - .env.etl
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      TTRSS_BASE_URL: http://tt-rss:80
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   tt_rss_db_data:
   tt_rss_app_data:
