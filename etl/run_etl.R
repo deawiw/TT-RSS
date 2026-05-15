@@ -21,25 +21,8 @@ script_path <- get_script_path()
 etl_dir <- dirname(script_path)
 project_root <- dirname(etl_dir)
 
-source(file.path(etl_dir, "R", "utils.R"))
-ensure_required_packages(c(
-  "httr2",
-  "jsonlite",
-  "purrr",
-  "dplyr",
-  "tidyr",
-  "readr",
-  "stringr",
-  "tibble",
-  "DBI",
-  "RPostgres"
-))
-source(file.path(etl_dir, "R", "api_client.R"))
-source(file.path(etl_dir, "R", "config.R"))
-source(file.path(etl_dir, "R", "transform_articles.R"))
-source(file.path(etl_dir, "R", "validate_articles.R"))
-source(file.path(etl_dir, "R", "db_client.R"))
-source(file.path(etl_dir, "R", "fraud_keywords.R"))
+library(ttrssanalytics)
+library(logger)
 
 print_usage <- function() {
   cat(
