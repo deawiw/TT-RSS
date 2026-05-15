@@ -1,6 +1,8 @@
 FROM rocker/r-ver:4.3.2
 
-ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_FRONTEND=noninteractive \
+    CRAN_REPO=https://packagemanager.posit.co/cran/__linux__/jammy/latest \
+    PKG_SYSREQS=false
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -12,10 +14,15 @@ RUN apt-get update \
       libpq-dev \
       libssl-dev \
       libxml2-dev \
+      libx11-dev \
       make \
     && rm -rf /var/lib/apt/lists/*
 
-RUN Rscript -e 'install.packages(c("httr2", "jsonlite", "purrr", "dplyr", "tidyr", "readr", "stringr", "tibble", "DBI", "RPostgres"), repos = "https://cloud.r-project.org")'
+RUN Rscript -e 'options(repos = c(CRAN = Sys.getenv("CRAN_REPO"))); install.packages("pak")'
+
+RUN Rscript -e 'options(repos = c(CRAN = Sys.getenv("CRAN_REPO"))); pak::pkg_install(c("httr2", "jsonlite", "purrr", "dplyr", "tidyr", "readr", "stringr", "tibble"), dependencies = c("Depends", "Imports", "LinkingTo"), upgrade = FALSE)'
+
+RUN Rscript -e 'options(repos = c(CRAN = Sys.getenv("CRAN_REPO"))); pak::pkg_install(c("DBI", "RPostgres"), dependencies = c("Depends", "Imports", "LinkingTo"), upgrade = FALSE)'
 
 WORKDIR /app
 
