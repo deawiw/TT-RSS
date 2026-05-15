@@ -104,22 +104,30 @@ process_unchecked_articles <- function(limit = 5) {
   if (is.null(conn)) return(list(error = "Database connection failed"))
   on.exit(dbDisconnect(conn))
   
+  # Берём все статьи, у которых ещё нет записи в fraud_articles
   query <- sprintf("
     SELECT a.news_id, a.title, a.content_text, a.url
     FROM articles a
-    WHERE a.is_fraud_related = TRUE
-      AND NOT EXISTS (
+    WHERE NOT EXISTS (
         SELECT 1 FROM fraud_articles f WHERE f.news_id = a.news_id
       )
     LIMIT %s
   ", limit)
   
-  unchecked <- dbGetQuery(conn, query)
-  if (nrow(unchecked) == 0) return(list(message = "All articles already checked"))
+  candidates <- dbGetQuery(conn, query)
+  if (nrow(candidates) == 0) return(list(message = "All articles already checked"))
+  
+  # Первичный отбор – словарный фильтр
+  candidates <- apply_fraud_keyword_filter(candidates)
+  fraud_candidates <- candidates[candidates$is_fraud_related == TRUE, ]
+  
+  if (nrow(fraud_candidates) == 0) {
+    return(list(message = "No fraud-related articles found after keyword filter"))
+  }
   
   analyzed <- 0
-  for (i in seq_len(nrow(unchecked))) {
-    article <- unchecked[i, ]
+  for (i in seq_len(nrow(fraud_candidates))) {
+    article <- fraud_candidates[i, ]
     message("Analyzing article ID: ", article$news_id)
     
     result <- analyze_article(article$title, article$content_text)
@@ -147,7 +155,6 @@ process_unchecked_articles <- function(limit = 5) {
   
   list(message = sprintf("Analysis complete. Processed %d new articles.", analyzed))
 }
-
 # Handler: get fraud articles
 get_fraud_articles <- function(limit = 10) {
   conn <- get_db_connection()
