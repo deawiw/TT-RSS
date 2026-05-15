@@ -8,6 +8,7 @@ library(jsonlite)
 library(DBI)
 library(RPostgres)
 library(dotenv)
+source("ttrssanalytics/R/fraud_keywords.R")
 
 # Загружаем переменные из .env
 dotenv::load_dot_env(".env")
