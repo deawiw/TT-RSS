@@ -8,9 +8,7 @@ library(jsonlite)
 library(DBI)
 library(RPostgres)
 library(dotenv)
-script_dir <- dirname(normalizePath(sys.frame(1)$ofile))
-fraud_path <- file.path(script_dir, "..", "ttrssanalytics", "R", "fraud_keywords.R")
-source(fraud_path)
+source("ttrssanalytics/R/fraud_keywords.R")
 
 # Загружаем переменные из .env
 dotenv::load_dot_env(".env")
