@@ -18,17 +18,23 @@ if (is.null(API_KEY) || nchar(API_KEY) == 0) {
   stop("CLOUD_RU_API_KEY not found in .env file!")
 }
 
-MODEL_NAME <- "Qwen/Qwen3-Next-80B-A3B-Instruct"
+MODEL_NAME <- "zai-org/GLM-4.7"
 API_URL <- "https://foundation-models.api.cloud.ru/v1/chat/completions"
 
 system_prompt <- paste(
-  "You are a cybersecurity expert. Analyze the news article and determine whether it describes",
-  "a specific fraud scheme, social engineering method, phishing, or cyber fraud.",
-  "If it does NOT describe a specific scheme (e.g., just statistics, court case, technology review), return:",
+  "You are a cybersecurity expert and educator. Your task is to analyze a news article and determine whether it describes a specific fraud scheme or social engineering attack that could affect ordinary people (not IT specialists).",
+  "Consider an article RELEVANT ONLY IF it describes a concrete method of fraud, phishing, vishing, fake websites, investment scams, or similar threats that target non‑experts.",
+  "An article is NOT RELEVANT if:",
+  "- it is written for cybersecurity professionals (e.g., deep technical analysis of APT malware, infrastructure hacking, exploit chains).",
+  "- it mainly reports on arrests, court cases, or statistics without explaining the scheme.",
+  "- it discusses enterprise security, vulnerability management, or software development security.",
+  "If the article is NOT RELEVANT, return:",
   '{"is_fraud_scheme": false}',
-  "If it DOES describe a new or existing fraud scheme, return:",
-  '{"is_fraud_scheme": true, "summary": "Brief description of the scheme (2-3 sentences).", "advice": ["Practical tip 1", "Practical tip 2", "Practical tip 3"]}',
-  "Answer ONLY in JSON format, no other text.",
+  "If it IS RELEVANT, return a JSON object with:",
+  '  "is_fraud_scheme": true,',
+  '  "summary": "Explain the scheme in 2-3 simple sentences as if talking to a person without technical background. Use plain Russian and avoid jargon.",',
+  '  "advice": ["Give 2-4 practical, easy‑to‑follow tips in Russian. The tips should be actionable for an ordinary user."]',
+  "IMPORTANT: The summary and advice must be in Russian. Answer ONLY in JSON format.",
   sep = "\n"
 )
 
@@ -184,7 +190,74 @@ get_fraud_articles <- function(limit = 10) {
     })
   )
 }
+#* Ask a question about fraud schemes
+#* @param question The user's question
+#* @get /ask
+function(question = "") {
+  if (is.null(question) || nchar(trimws(question)) == 0) {
+    return(list(error = "No question provided"))
+  }
 
+  conn <- get_db_connection()
+  if (is.null(conn)) return(list(error = "Database connection failed"))
+  on.exit(dbDisconnect(conn))
+
+  # Берём последние проверенные схемы для контекста
+  context_articles <- dbGetQuery(conn, "
+    SELECT f.summary, a.title
+    FROM fraud_articles f
+    JOIN articles a ON f.news_id = a.news_id
+    WHERE f.is_fraud_scheme = TRUE
+    ORDER BY f.selected_at DESC
+    LIMIT 10
+  ")
+
+  context_text <- ""
+  if (nrow(context_articles) > 0) {
+    for (i in seq_len(nrow(context_articles))) {
+      context_text <- paste0(context_text,
+        "- ", context_articles$title[i], ": ", context_articles$summary[i], "\n")
+    }
+  }
+
+  prompt <- paste0(
+    "You are a cybersecurity expert assistant. A user asks you about fraud schemes and cybersecurity threats.\n",
+    "Here are some recent fraud schemes from our database for context:\n",
+    context_text, "\n",
+    "User question: ", question, "\n\n",
+    "Answer the user's question helpfully and concisely in Russian. Base your answer on the context provided if relevant, otherwise use your general cybersecurity knowledge."
+  )
+
+  body <- list(
+    model = MODEL_NAME,
+    messages = list(
+      list(role = "user", content = prompt)
+    ),
+    temperature = 0.7,
+    max_tokens = 500
+  )
+
+  resp <- tryCatch({
+    request(API_URL) |>
+      req_headers(
+        Authorization = paste("Bearer", API_KEY),
+        "Content-Type" = "application/json"
+      ) |>
+      req_body_json(body) |>
+      req_timeout(60) |>
+      req_perform()
+  }, error = function(e) {
+    message("API request error: ", e$message)
+    return(NULL)
+  })
+
+  if (is.null(resp)) return(list(error = "Failed to get response from LLM"))
+
+  parsed <- fromJSON(resp_body_string(resp), simplifyVector = FALSE)
+  answer <- parsed$choices[[1]]$message$content
+
+  list(question = question, answer = answer)
+}
 # Plumber API
 #* @apiTitle Fraud News MCP Server
 
