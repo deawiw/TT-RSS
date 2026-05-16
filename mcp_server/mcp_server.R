@@ -252,6 +252,7 @@ function(question = "") {
   })
 
   if (is.null(resp)) return(list(error = "Failed to get response from LLM"))
+  message("API full response: ", resp_body_string(resp))
 
   parsed <- fromJSON(resp_body_string(resp), simplifyVector = FALSE)
   answer <- parsed$choices[[1]]$message$content
