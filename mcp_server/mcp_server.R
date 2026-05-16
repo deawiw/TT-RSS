@@ -11,7 +11,7 @@ library(dotenv)
 source("~/TT-RSS/ttrssanalytics/R/fraud_keywords.R")
 
 # Загружаем переменные из .env
-dotenv::load_dot_env(".env")
+dotenv::load_dot_env(file.path(Sys.getenv("HOME"), "TT-RSS", ".env"))
 
 API_KEY <- Sys.getenv("CLOUD_RU_API_KEY")
 if (is.null(API_KEY) || nchar(API_KEY) == 0) {
