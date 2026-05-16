@@ -1,6 +1,7 @@
 library(shiny)
 library(DBI)
 library(RPostgres)
+library(httr)
 
 # ---------- ПОДКЛЮЧЕНИЕ К БД ----------
 get_fraud_articles <- function(limit = 100) {
@@ -121,7 +122,19 @@ ui <- fluidPage(
              style = "color: #666; margin-bottom: 20px;")
     )
   ),
-
+  fluidRow(
+    column(12,
+      wellPanel(
+        h4("💬 Задайте вопрос о мошеннических схемах"),
+        textInput("user_question", NULL, 
+                  placeholder = "Например: как защититься от фишинга?"),
+        actionButton("ask_btn", "Спросить", class = "btn-danger"),
+        br(), br(),
+        h4("Ответ ИИ:"),
+        textOutput("mcp_answer")
+      )
+    )
+  ),
   uiOutput("articles_list")
 )
 
@@ -190,7 +203,22 @@ server <- function(input, output, session) {
       articles_list
     )
   })
-
+  observeEvent(input$ask_btn, {
+    req(input$user_question)
+    
+    response <- httr::GET(
+      url = "http://localhost:8000/ask",
+      query = list(question = input$user_question)
+    )
+    
+    if (httr::status_code(response) == 200) {
+      result <- httr::content(response, "parsed")
+      output$mcp_answer <- renderText(result$answer)
+    } else {
+      output$mcp_answer <- renderText("Не удалось получить ответ. Попробуйте позже.")
+    }
+  })
+  
   # Обработчик кнопки "Читать статью"
   observe({
     if (nrow(articles_data) > 0) {
