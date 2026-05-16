@@ -6,6 +6,8 @@ RUN Rscript -e 'install.packages(c("DBI", "RPostgres"), repos="https://cran.rstu
 
 COPY app.R /srv/shiny-server/app/app.R
 
+RUN echo 'DB_HOST=db\nDB_PORT=5432\nDB_NAME=news_analytics\nDB_USER=ttrss' >> /home/shiny/.Renviron
+
 EXPOSE 3838
 
 CMD ["/usr/bin/shiny-server"]
