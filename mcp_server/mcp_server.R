@@ -18,7 +18,8 @@ if (is.null(API_KEY) || nchar(API_KEY) == 0) {
   stop("CLOUD_RU_API_KEY not found in .env file!")
 }
 
-MODEL_NAME <- "zai-org/GLM-4.7"
+MODEL_NAME <- "Qwen/Qwen3-Next-80B-A3B-Instruct"
+
 API_URL <- "https://foundation-models.api.cloud.ru/v1/chat/completions"
 
 system_prompt <- paste(
