@@ -7,11 +7,11 @@ library(RPostgres)
 get_fraud_articles <- function(limit = 100) {
   con <- dbConnect(
     RPostgres::Postgres(),
-    host = "217.144.184.2",
-    port = 5433,
-    dbname = "news_analytics",
-    user = "ttrss",
-    password = "change_me_db_password"
+    host = Sys.getenv("DB_HOST", "localhost"),
+    port = as.integer(Sys.getenv("DB_PORT", "5433")),
+    dbname = Sys.getenv("DB_NAME", "news_analytics"),
+    user = Sys.getenv("DB_USER", "ttrss"),
+    password = Sys.getenv("DB_PASSWORD", "")
   )
   on.exit(dbDisconnect(con))
   

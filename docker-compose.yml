@@ -57,6 +57,22 @@ services:
       db:
         condition: service_healthy
 
+  shiny:
+    build: ./shiny
+    container_name: tt-rss-shiny
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: news_analytics
+      DB_USER: ttrss
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "3838:3838"
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   tt_rss_db_data:
   tt_rss_app_data:
