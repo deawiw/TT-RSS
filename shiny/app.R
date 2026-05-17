@@ -207,7 +207,7 @@ server <- function(input, output, session) {
     req(input$user_question)
     
     response <- httr::GET(
-      url = "http://localhost:8000/ask",
+      url = "http://mcp:8000/ask",
       query = list(question = input$user_question)
     )
     
