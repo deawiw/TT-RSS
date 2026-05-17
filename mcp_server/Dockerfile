@@ -1,8 +1,10 @@
 FROM rocker/r-ver:4.3.2
 
-RUN apt-get update && apt-get install -y libpq-dev libssl-dev libcurl4-openssl-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y libpq-dev libssl-dev libcurl4-openssl-dev libsodium-dev && rm -rf /var/lib/apt/lists/*
 
-RUN Rscript -e 'install.packages(c("plumber", "httr2", "jsonlite", "DBI", "RPostgres", "dotenv", "devtools"), repos="https://cran.rstudio.com")'
+RUN Rscript -e 'install.packages(c("httpuv", "sodium"), repos="https://cran.rstudio.com")'
+
+RUN Rscript -e 'install.packages(c("plumber", "httr2", "jsonlite", "DBI", "RPostgres"), repos="https://cran.rstudio.com")'
 
 COPY . /app/mcp_server/
 
