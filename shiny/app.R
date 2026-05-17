@@ -212,8 +212,9 @@ server <- function(input, output, session) {
     )
     
     if (httr::status_code(response) == 200) {
-      result <- httr::content(response, "parsed")
-      output$mcp_answer <- renderText(result$answer)
+      result <- httr::content(response, as = "text", encoding = "UTF-8")
+      parsed <- jsonlite::fromJSON(result)
+      output$mcp_answer <- renderText(parsed$answer[[1]])
     } else {
       output$mcp_answer <- renderText("Не удалось получить ответ. Попробуйте позже.")
     }
