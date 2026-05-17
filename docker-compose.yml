@@ -73,6 +73,23 @@ services:
       db:
         condition: service_healthy
 
+  mcp:
+    build: ./mcp_server
+    container_name: tt-rss-mcp
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: news_analytics
+      DB_USER: ttrss
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      CLOUD_RU_API_KEY: ${CLOUD_RU_API_KEY}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   tt_rss_db_data:
   tt_rss_app_data:
