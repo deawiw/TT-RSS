@@ -43,8 +43,7 @@ services:
         condition: service_healthy
 
   etl:
-    build:
-      context: ./etl
+    image: kirillmalakhiev/tt-rss-etl:latest
     container_name: tt-rss-etl
     restart: unless-stopped
     env_file:
@@ -58,7 +57,7 @@ services:
         condition: service_healthy
 
   shiny:
-    build: ./shiny
+    image: kirillmalakhiev/tt-rss-shiny:latest
     container_name: tt-rss-shiny
     restart: unless-stopped
     environment:
@@ -74,7 +73,7 @@ services:
         condition: service_healthy
 
   mcp:
-    build: ./mcp_server
+    image: kirillmalakhiev/tt-rss-mcp:latest
     container_name: tt-rss-mcp
     restart: unless-stopped
     environment:
