@@ -1,8 +1,11 @@
-# Полный словарь ключевых слов и фраз для первичного отбора новостей,
-# связанных с кибермошенничеством, социальной инженерией и фишингом.
-# Используется в ETL-модуле для установки флага is_fraud_related.
-# Каждый элемент — регулярное выражение (с упрощёнными спецсимволами .*).
-# При проверке текст приводится к нижнему регистру, поиск регистронезависимый.
+#' Словарь ключевых слов для детекции мошенничества
+#'
+#' Вектор регулярных выражений для поиска мошеннических статей.
+#' Каждый элемент — регулярное выражение с поддержкой `.*` для разных окончаний.
+#' Поиск регистронезависимый.
+#'
+#' @format Вектор символов (character vector)
+#' @keywords internal
 
 fraud_keywords <- c(
   # ── 1. Общие маркеры мошенничества
@@ -219,11 +222,26 @@ fraud_keywords <- c(
 
 # ── Функция первичного отбора
 
-#' @title Apply fraud keyword filter
-#' @description Adds fraud-related classification to normalized article rows using the built-in keyword dictionary.
-#' @param articles_df Data frame of normalized articles.
-#' @return Data frame with fraud-related classification applied.
+#' Применение фильтрации по ключевым словам
+#'
+#' Функция добавляет колонку `is_fraud_related` в датафрейм со статьями.
+#' Поиск происходит по полям `title`, `content_text` и `topic_tags`.
+#'
+#' @param articles_df Датафрейм с колонками title, content_text, topic_tags
+#' @return Датафрейм с добавленной колонкой is_fraud_related
 #' @export
+#'
+#' @examples
+#' \dontrun{
+#' df <- data.frame(
+#'   title = c("Фишинг атака", "Обычная новость"),
+#'   content_text = c("", ""),
+#'   topic_tags = c("", "")
+#' )
+#' result <- apply_fraud_keyword_filter(df)
+#' table(result$is_fraud_related)
+#' }
+
 apply_fraud_keyword_filter <- function(articles_df) {
   if (nrow(articles_df) == 0) {
     return(articles_df)
