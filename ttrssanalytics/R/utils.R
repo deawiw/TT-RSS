@@ -1,109 +1,107 @@
-#' @title Null coalescing operator
-#' @description Returns the fallback value when the left-hand value is NULL or empty.
-#' @param x Primary value.
-#' @param y Fallback value.
-#' @return x when it is non-empty; otherwise y.
+#' Объединение NULL-значений
+#'
+#' @param x Первое значение
+#' @param y Второе значение
+#' @return Если x не NULL, то x, иначе y
 #' @export
 `%||%` <- function(x, y) {
   if (is.null(x) || length(x) == 0) {
     return(y)
   }
-
   x
 }
 
-#' @title Stop with an ETL error
-#' @description Raises an error without attaching the call, keeping ETL failure messages concise.
-#' @param message Error message to raise.
-#' @return This function does not return; it stops execution.
+#' Остановка выполнения с ошибкой
+#'
+#' @param message Текст ошибки
+#' @return Останавливает выполнение
 #' @export
 fail <- function(message) {
   stop(message, call. = FALSE)
 }
 
-#' @title Trim a scalar string
-#' @description Converts a value to a scalar character string and trims surrounding whitespace.
-#' @param value Value to trim.
-#' @return Character scalar.
+#' Удаление пробелов в начале и конце строки
+#'
+#' @param value Входная строка
+#' @return Строка без пробелов по краям
 #' @export
 trim_string <- function(value) {
   if (is.null(value) || length(value) == 0) {
     return("")
   }
-
   trimws(as.character(value[[1]]))
 }
 
+#' Проверка пустой строки
+#'
+#' @param value Проверяемое значение
+#' @return TRUE если пустое, иначе FALSE
+#' @export
 is_blank <- function(value) {
   !nzchar(trim_string(value))
 }
 
-#' @title Truncate a string
-#' @description Shortens a string to a target display width and appends an ellipsis when needed.
-#' @param value Value to truncate.
-#' @param width Maximum display width.
-#' @return Character scalar.
+#' Обрезание длинной строки с добавлением троеточия
+#'
+#' @param value Входная строка
+#' @param width Максимальная длина
+#' @return Обрезанная строка
 #' @export
 truncate_string <- function(value, width = 200L) {
   value <- trim_string(value)
-
   if (!nzchar(value)) {
     return("")
   }
-
   width <- as.integer(width)
   if (is.na(width) || width < 10L) {
     width <- 10L
   }
-
   if (nchar(value, type = "width") <= width) {
     return(value)
   }
-
   paste0(substr(value, 1L, width - 3L), "...")
 }
 
-#' @title Check whether a path is absolute
-#' @description Detects Unix, Windows drive-letter, and UNC absolute paths.
-#' @param path Path string to check.
-#' @return Logical scalar indicating whether the path is absolute.
+#' Проверка абсолютного пути
+#'
+#' @param path Путь для проверки
+#' @return TRUE если путь абсолютный
+#' @keywords internal
 is_absolute_path <- function(path) {
   grepl("^(?:[A-Za-z]:|/|\\\\\\\\)", path)
 }
 
-#' @title Resolve a path against a base directory
-#' @description Converts relative paths to normalized paths under a base directory while leaving absolute paths unchanged.
-#' @param path Path to resolve.
-#' @param base_dir Base directory used for relative paths.
-#' @return Normalized path string.
+#' Нормализация пути
+#'
+#' @param path Исходный путь
+#' @param base_dir Базовая директория
+#' @return Нормализованный путь
 #' @export
 resolve_path <- function(path, base_dir) {
   if (is_blank(path)) {
     fail("Получен пустой путь к файлу конфигурации.")
   }
-
   resolved <- if (is_absolute_path(path)) path else file.path(base_dir, path)
   normalizePath(resolved, winslash = "/", mustWork = FALSE)
 }
 
-#' @title Ensure a directory exists
-#' @description Creates a directory recursively when it does not already exist.
-#' @param path Directory path.
-#' @return Invisibly returns the directory path.
+#' Создание директории (если не существует)
+#'
+#' @param path Путь к директории
+#' @return Путь к созданной директории
 #' @export
 ensure_dir <- function(path) {
   if (!dir.exists(path)) {
     dir.create(path, recursive = TRUE, showWarnings = FALSE)
   }
-
   invisible(path)
 }
 
-#' @title Write UTF-8 CSV
-#' @description Writes a data frame to CSV using UTF-8 encoding and creates the parent directory if needed.
-#' @param data Data frame or table-like object to write.
-#' @param path Output CSV path.
-#' @return Invisibly returns the output path.
+#' Сохранение данных в CSV (UTF-8)
+#'
+#' @param data Датафрейм для сохранения
+#' @param path Путь к файлу
+#' @return Путь к сохранённому файлу
 #' @export
 write_csv_utf8 <- function(data, path) {
   ensure_dir(dirname(path))
@@ -111,33 +109,30 @@ write_csv_utf8 <- function(data, path) {
   invisible(path)
 }
 
-#' @title Format UTC timestamp
-#' @description Converts a date-time value to a UTC ISO-8601 timestamp string.
-#' @param value Date-time value to format.
-#' @return Character scalar timestamp or NA when conversion fails.
+#' Форматирование времени в UTC
+#'
+#' @param value Время для форматирования
+#' @return Строка в формате UTC
 #' @export
 format_utc_timestamp <- function(value = Sys.time()) {
   datetime <- tryCatch(
     as.POSIXct(value, origin = "1970-01-01", tz = "UTC"),
     error = function(e) NA
   )
-
   if (is.na(datetime)) {
     return(NA_character_)
   }
-
   format(datetime, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
 }
 
-#' @title Write pretty JSON
-#' @description Writes an object as pretty JSON and creates the parent directory if needed.
-#' @param data Object to serialize to JSON.
-#' @param path Output JSON path.
-#' @return Invisibly returns the output path.
+#' Сохранение данных в JSON
+#'
+#' @param data Данные для сохранения
+#' @param path Путь к файлу
+#' @return Путь к сохранённому файлу
 #' @export
 write_json_pretty <- function(data, path) {
   ensure_dir(dirname(path))
-
   json_text <- jsonlite::toJSON(
     data,
     pretty = TRUE,
@@ -145,51 +140,54 @@ write_json_pretty <- function(data, path) {
     null = "null",
     force = TRUE
   )
-
   writeLines(json_text, path, useBytes = TRUE)
   invisible(path)
 }
 
+#' Внутренняя функция логирования
+#'
+#' @param level Уровень логирования
+#' @param message Сообщение
+#' @keywords internal
 log_message <- function(level, message) {
   timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S", tz = Sys.timezone() %||% "UTC")
   output <- sprintf("[%s] [%s] %s\n", timestamp, level, message)
   stream <- if (identical(level, "ERROR")) stderr() else stdout()
-
   cat(output, file = stream)
 }
 
-#' @title Log an informational ETL message
-#' @description Writes an informational ETL message to the standard output stream.
-#' @param message Message to write.
-#' @return No meaningful return value.
+#' Информационное сообщение
+#'
+#' @param message Сообщение для вывода
 #' @export
 log_info <- function(message) {
   log_message("INFO", message)
 }
 
-#' @title Log an ETL warning message
-#' @description Writes a warning ETL message to the standard output stream.
-#' @param message Message to write.
-#' @return No meaningful return value.
+#' Предупреждение
+#'
+#' @param message Сообщение для вывода
 #' @export
 log_warn <- function(message) {
   log_message("WARN", message)
 }
 
-#' @title Log an ETL error message
-#' @description Writes an error ETL message to the standard error stream.
-#' @param message Message to write.
-#' @return No meaningful return value.
+#' Сообщение об ошибке
+#'
+#' @param message Сообщение для вывода
 #' @export
 log_error <- function(message) {
   log_message("ERROR", message)
 }
 
+#' Проверка наличия необходимых пакетов
+#'
+#' @param packages Вектор с именами пакетов
+#' @keywords internal
 ensure_required_packages <- function(packages) {
   missing_packages <- packages[
     !vapply(packages, requireNamespace, logical(1), quietly = TRUE)
   ]
-
   if (length(missing_packages) > 0) {
     fail(
       sprintf(
@@ -198,6 +196,5 @@ ensure_required_packages <- function(packages) {
       )
     )
   }
-
   invisible(TRUE)
 }
